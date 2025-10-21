@@ -32,9 +32,9 @@ WORKDIR /api
 COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY ./src ./src
-RUN mkdir -p /tmp/isolate && chmod 777 /tmp/isolate
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 CMD ["/start.sh"]
+
 
 EXPOSE 2000/tcp
