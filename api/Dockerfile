@@ -28,7 +28,7 @@ COPY --from=isolate /usr/local/etc/isolate /usr/local/etc/isolate
 
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
 
-WORKDIR /piston_api
+WORKDIR /api
 COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY ./src ./src
