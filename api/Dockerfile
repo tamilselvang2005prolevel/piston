@@ -33,15 +33,18 @@ COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY ./src ./src
 
-# ✅ Install prebuilt language runtimes
-RUN mkdir -p /api/packages && \
-    cd /api/packages && \
-    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/python.tar.gz && \
-    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/c.tar.gz && \
-    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/cpp.tar.gz && \
-    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/java.tar.gz && \
-    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/javascript.tar.gz && \
-    for f in *.tar.gz; do tar -xzf "$f"; rm "$f"; done
+# ✅ Install runtimes dynamically from the Piston repository
+RUN git clone https://github.com/engineer-man/piston.git /tmp/piston && \
+    cd /tmp/piston && \
+    npm ci && \
+    node src/cli.js ppman install python 3.10.0 && \
+    node src/cli.js ppman install c gcc-12.2.0 && \
+    node src/cli.js ppman install cpp g++-12.2.0 && \
+    node src/cli.js ppman install java 17.0.1 && \
+    node src/cli.js ppman install javascript node-18.15.0 && \
+    mv packages /api/packages && \
+    rm -rf /tmp/piston
+
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
