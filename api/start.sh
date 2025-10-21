@@ -1,9 +1,10 @@
 #!/bin/sh
-echo "✅ Directories ready. Starting Piston..."
+echo "✅ Starting Piston API Server..."
 
-# Ensure packages directory exists
-mkdir -p /api/packages
-chmod -R 777 /api/packages
+# Make sure isolate has temp dir
+mkdir -p /tmp/isolate
+chmod 777 /tmp/isolate
+export PISTON_TEMPDIR=/tmp/isolate
 
-# Start API
-exec node src/index.js
+# Run API
+node src/index.js
