@@ -1,10 +1,14 @@
 #!/bin/sh
-echo "✅ Starting Piston API Server..."
+set -e
 
-# Make sure isolate has temp dir
+# ✅ Ensure isolate temp dir exists
 mkdir -p /tmp/isolate
 chmod 777 /tmp/isolate
 export PISTON_TEMPDIR=/tmp/isolate
 
-# Run API
-node src/index.js
+# ✅ Ensure runtime downloads exist (auto download at runtime)
+echo "🌍 Starting dynamic runtime system..."
+echo "No static packages used — runtimes will be downloaded on first use."
+
+# ✅ Start API
+exec node src/index.js
