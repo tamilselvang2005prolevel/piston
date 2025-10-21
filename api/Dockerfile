@@ -10,7 +10,6 @@ RUN apt-get update && \
 
 FROM node:18-bullseye-slim
 
-
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN dpkg-reconfigure -p critical dash
@@ -22,6 +21,7 @@ RUN apt-get update && \
     libfftw3-dev libglpk-dev libqhull-dev libqrupdate-dev libsuitesparse-dev \
     libsundials-dev libpcre2-dev libcap-dev && \
     rm -rf /var/lib/apt/lists/*
+
 RUN useradd -M piston
 COPY --from=isolate /usr/local/bin/isolate /usr/local/bin
 COPY --from=isolate /usr/local/etc/isolate /usr/local/etc/isolate
@@ -32,9 +32,16 @@ WORKDIR /api
 COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY ./src ./src
+
+# ✅ Install popular language runtimes before deployment
+RUN node src/cli.js ppman install python && \
+    node src/cli.js ppman install c && \
+    node src/cli.js ppman install cpp && \
+    node src/cli.js ppman install java && \
+    node src/cli.js ppman install javascript
+
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 CMD ["/start.sh"]
-
 
 EXPOSE 2000/tcp
