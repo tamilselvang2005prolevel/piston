@@ -1,6 +1,6 @@
 FROM buildpack-deps:bullseye AS isolate
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git libcap-dev && \
+    apt-get install -y --no-install-recommends git libcap-dev wget && \
     rm -rf /var/lib/apt/lists/* && \
     git clone https://github.com/envicutor/isolate.git /tmp/isolate/ && \
     cd /tmp/isolate && \
@@ -16,7 +16,7 @@ RUN dpkg-reconfigure -p critical dash
 RUN apt-get update && \
     apt-get install -y libxml2 gnupg tar coreutils util-linux libc6-dev \
     binutils build-essential locales libpcre3-dev libevent-dev libgmp3-dev \
-    libncurses6 libncurses5 libedit-dev libseccomp-dev rename procps python3 \
+    libncurses6 libncurses5 libedit-dev libseccomp-dev rename procps python3 wget \
     libreadline-dev libblas-dev liblapack-dev libpcre3-dev libarpack2-dev \
     libfftw3-dev libglpk-dev libqhull-dev libqrupdate-dev libsuitesparse-dev \
     libsundials-dev libpcre2-dev libcap-dev && \
@@ -33,12 +33,15 @@ COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY ./src ./src
 
-# ✅ Install popular language runtimes before deployment
-RUN node src/cli.js ppman install python && \
-    node src/cli.js ppman install c && \
-    node src/cli.js ppman install cpp && \
-    node src/cli.js ppman install java && \
-    node src/cli.js ppman install javascript
+# ✅ Install prebuilt language runtimes
+RUN mkdir -p /api/packages && \
+    cd /api/packages && \
+    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/python.tar.gz && \
+    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/c.tar.gz && \
+    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/cpp.tar.gz && \
+    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/java.tar.gz && \
+    wget -q https://github.com/engineer-man/piston/releases/download/pkgs-v3/javascript.tar.gz && \
+    for f in *.tar.gz; do tar -xzf "$f"; rm "$f"; done
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
