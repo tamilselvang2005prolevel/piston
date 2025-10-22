@@ -5,31 +5,36 @@ echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-# Create the main data directory if missing
-if [ ! -d "/piston" ]; then
-  echo "📁 Creating /piston data directory..."
-  mkdir -p /piston
-fi
+# Ensure directories exist
+mkdir -p /piston /tmp/isolate
 
 echo "🌍 Starting dynamic runtime system..."
-echo "🔄 Will download runtimes automatically when used..."
+echo "🔄 Runtimes will download automatically when first used..."
 
-# Start API in background
+# Export required environment variables
+export DATA_DIRECTORY=/piston
+export PISTON_TEMP_DIR=/tmp/isolate
+
+# Start the API server in background
 node src/index.js &
 
-# Give server a few seconds to boot
-sleep 8
+# Give it a few seconds to boot
+sleep 10
 
-echo "🔥 Starting runtime warmup..."
+# Verify API endpoint and download runtimes dynamically
+echo "🔥 Warming up key runtimes..."
 
 declare -a LANGS=("python" "c" "cpp" "java" "javascript")
 
 for lang in "${LANGS[@]}"; do
   echo "⚙️  Warming up $lang..."
-  curl -s -X POST http://localhost:10000/api/v2/execute \
+  curl -s -X POST http://127.0.0.1:10000/api/v2/execute \
     -H "Content-Type: application/json" \
-    -d "{\"language\": \"$lang\", \"version\": \"latest\", \"files\": [{\"name\": \"main.$lang\", \"content\": \"print('hello')\"}]}" || true
+    -d "{\"language\":\"$lang\",\"version\":\"latest\",\"files\":[{\"content\":\"print('warmup')\"}]}" \
+    || echo "⚠️  Warmup failed for $lang"
 done
 
-echo "✅ Warmup finished."
+echo "✅ Warmup finished. Piston API is live."
+echo "=========================================="
+
 wait
