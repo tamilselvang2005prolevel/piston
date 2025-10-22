@@ -5,10 +5,10 @@ echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-# Ensure /piston directory exists
+# Ensure piston data directory exists
 if [ ! -d "/piston" ]; then
   echo "📁 Creating /piston data directory..."
-  mkdir -p /piston
+  mkdir -p /piston/packages
 fi
 
 cd /api
@@ -16,11 +16,9 @@ cd /api
 echo "🌍 Starting dynamic runtime system..."
 echo "🔄 Runtimes will download automatically when first used..."
 
-# --- Runtime setup ---
-# This uses a mirror-friendly proxy to bypass Render download throttling
-RUNTIME_URL="https://gh-proxy.com/https://github.com/engineer-man/piston/releases/download/pkgs-v3"
+# Mirror for reliable downloads (GitHub CDN proxy)
+BASE_URL="https://mirror.ghproxy.com/https://github.com/engineer-man/piston/releases/download/pkgs-v3"
 
-# Declare runtimes to install
 declare -A RUNTIMES=(
   ["python"]="python-3.12.0.pkg.tar.gz"
   ["c"]="c.pkg.tar.gz"
@@ -29,30 +27,37 @@ declare -A RUNTIMES=(
   ["javascript"]="javascript.pkg.tar.gz"
 )
 
-mkdir -p /piston/packages
-
-# Sequential download (not parallel) to prevent timeout on Render
 for lang in "${!RUNTIMES[@]}"; do
   pkg="${RUNTIMES[$lang]}"
+  dest="/piston/packages/$pkg"
+
   echo "⬇️  Downloading $lang runtime..."
-  
-  wget -q --retry-connrefused --waitretry=2 --timeout=30 -t 3 "$RUNTIME_URL/$pkg" -O "/piston/packages/$pkg" || {
+  curl -L --retry 3 --connect-timeout 20 "$BASE_URL/$pkg" -o "$dest" || {
     echo "⚠️  Failed to download $lang runtime, skipping..."
     continue
   }
 
+  # Verify file size > 1MB to confirm it downloaded
+  if [ ! -s "$dest" ] || [ $(stat -c%s "$dest") -lt 1000000 ]; then
+    echo "⚠️  Incomplete download for $lang runtime, skipping..."
+    rm -f "$dest"
+    continue
+  fi
+
   echo "📦 Extracting $lang runtime..."
-  tar -xzf "/piston/packages/$pkg" -C /piston/packages && rm "/piston/packages/$pkg"
+  mkdir -p "/piston/packages/$lang"
+  tar -xzf "$dest" -C "/piston/packages/$lang" && rm "$dest"
   echo "✅ Installed $lang runtime"
 done
 
 echo "🚀 Starting API server..."
 node src/index.js &
 
-sleep 4
+# Wait for server to boot
+sleep 5
+
 echo "🔥 Warming up key runtimes..."
 
-# --- Warmup each language ---
 for lang in "${!RUNTIMES[@]}"; do
   echo "⚙️  Warming up $lang..."
   curl -s -X POST http://localhost:10000/api/v2/execute \
