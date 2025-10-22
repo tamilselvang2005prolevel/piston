@@ -6,7 +6,16 @@ mkdir -p /tmp/isolate
 chmod 777 /tmp/isolate
 export PISTON_TEMPDIR=/tmp/isolate
 
-# ✅ Ensure runtime downloads exist (auto download at runtime)
+# ✅ Ensure /piston data directory exists (Render-safe)
+if [ ! -d "/piston" ]; then
+  echo "📁 Creating /piston data directory..."
+  mkdir -p /piston
+  chmod 777 /piston
+fi
+
+# ✅ Set environment variable (used by piston config)
+export DATA_DIRECTORY=/piston
+
 echo "🌍 Starting dynamic runtime system..."
 echo "No static packages used — runtimes will be downloaded on first use."
 
