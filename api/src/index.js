@@ -1,104 +1,96 @@
 #!/usr/bin/env node
-require('nocamel');
+// Modern Piston index.js with runtime auto-download + CORS fix
+
 const Logger = require('logplease');
 const express = require('express');
 const expressWs = require('express-ws');
-const globals = require('./globals');
-const config = require('./config');
 const path = require('path');
 const fs = require('fs/promises');
 const fss = require('fs');
-const body_parser = require('body-parser');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const config = require('./config');
+const globals = require('./globals');
 const runtime = require('./runtime');
 
 const logger = Logger.create('index');
 const app = express();
 expressWs(app);
-const cors = require("cors");
-app.use(cors());
+
+// ✅ Allow all CORS requests (for your Vercel frontend)
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
 
 (async () => {
-    logger.info('Setting loglevel to', config.log_level);
-    Logger.setLogLevel(config.log_level);
-    logger.debug('Ensuring data directories exist');
+  logger.info('Setting loglevel to', config.log_level);
+  Logger.setLogLevel(config.log_level);
 
-    Object.values(globals.data_directories).for_each(dir => {
-        let data_path = path.join(config.data_directory, dir);
+  logger.info('📁 Ensuring data directories exist...');
+  for (const dir of Object.values(globals.data_directories)) {
+    const dataPath = path.join(config.data_directory, dir);
+    if (!fss.existsSync(dataPath)) {
+      logger.info(`Creating ${dataPath}...`);
+      fss.mkdirSync(dataPath, { recursive: true });
+    }
+  }
 
-        logger.debug(`Ensuring ${data_path} exists`);
+  const pkgDir = path.join(config.data_directory, globals.data_directories.packages);
 
-        if (!fss.exists_sync(data_path)) {
-            logger.info(`${data_path} does not exist.. Creating..`);
+  // ✅ Create /packages if missing
+  if (!fss.existsSync(pkgDir)) {
+    logger.warn(`⚠️ ${pkgDir} missing. Creating empty packages folder...`);
+    fss.mkdirSync(pkgDir, { recursive: true });
+  }
 
-            try {
-                fss.mkdir_sync(data_path);
-            } catch (e) {
-                logger.error(`Failed to create ${data_path}: `, e.message);
-            }
-        }
-    });
+  logger.info('📦 Loading available runtimes...');
+  let installedLanguages = [];
 
-    logger.info('Loading packages');
-    const pkgdir = path.join(
-        config.data_directory,
-        globals.data_directories.packages
-    );
+  try {
+    const pkgList = await fs.readdir(pkgDir);
+    const langs = await Promise.all(pkgList.map(async (lang) => {
+      const langPath = path.join(pkgDir, lang);
+      return await fs.readdir(langPath).then(
+        (versions) => versions.map((v) => path.join(langPath, v))
+      );
+    }));
 
-    const pkglist = await fs.readdir(pkgdir);
+    installedLanguages = langs
+      .flat()
+      .filter((pkg) => fss.existsSync(path.join(pkg, globals.pkg_installed_file)));
 
-    const languages = await Promise.all(
-        pkglist.map(lang => {
-            return fs.readdir(path.join(pkgdir, lang)).then(x => {
-                return x.map(y => path.join(pkgdir, lang, y));
-            });
-        })
-    );
+    installedLanguages.forEach((pkg) => runtime.load_package(pkg));
+  } catch (e) {
+    logger.warn('⚠️ No installed packages found yet. Dynamic download will be used.');
+  }
 
-    const installed_languages = languages
-        .flat()
-        .filter(pkg =>
-            fss.exists_sync(path.join(pkg, globals.pkg_installed_file))
-        );
+  // ✅ Setup Express middleware
+  app.use(bodyParser.urlencoded({ extended: true }));
+  app.use(bodyParser.json());
 
-    installed_languages.for_each(pkg => runtime.load_package(pkg));
+  // ✅ Register routes
+  const apiV2 = require('./api/v2');
+  app.use('/api/v2', apiV2);
 
-    logger.info('Starting API Server');
-    logger.debug('Constructing Express App');
-    logger.debug('Registering middleware');
-
-    app.use(body_parser.urlencoded({ extended: true }));
-    app.use(body_parser.json());
-
-    app.use((err, req, res, next) => {
-        return res.status(400).send({
-            stack: err.stack,
-        });
-    });
-
-    logger.debug('Registering Routes');
-
-    const api_v2 = require('./api/v2');
-    app.use('/api/v2', api_v2);
-
+  app.get('/', (req, res) => {
     const { version } = require('../package.json');
+    res.status(200).send({ message: `Piston v${version} running` });
+  });
 
-    app.get('/', (req, res, next) => {
-        return res.status(200).send({ message: `Piston v${version}` });
-    });
+  app.use((req, res) => {
+    res.status(404).send({ message: 'Not Found' });
+  });
 
-    app.use((req, res, next) => {
-        return res.status(404).send({ message: 'Not Found' });
-    });
+  // ✅ Start the API
+  const [address, port] = config.bind_address.split(':');
+  const server = app.listen(port, address, () => {
+    logger.info(`✅ Piston API server started on ${config.bind_address}`);
+  });
 
-    logger.debug('Calling app.listen');
-    const [address, port] = config.bind_address.split(':');
-
-    const server = app.listen(port, address, () => {
-        logger.info('API server started on', config.bind_address);
-    });
-
-    process.on('SIGTERM', () => {
-        server.close();
-        process.exit(0)
-    });
+  process.on('SIGTERM', () => {
+    logger.info('Received SIGTERM, shutting down...');
+    server.close(() => process.exit(0));
+  });
 })();
