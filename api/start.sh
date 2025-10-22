@@ -1,23 +1,36 @@
 #!/bin/sh
 set -e
 
-# ✅ Ensure isolate temp dir exists
+# ✅ Setup isolate
 mkdir -p /tmp/isolate
 chmod 777 /tmp/isolate
 export PISTON_TEMPDIR=/tmp/isolate
 
-# ✅ Ensure /piston data directory exists (Render-safe)
+# ✅ Setup data directory (Render-safe)
 if [ ! -d "/piston" ]; then
   echo "📁 Creating /piston data directory..."
   mkdir -p /piston
   chmod 777 /piston
 fi
 
-# ✅ Set environment variable (used by piston config)
 export DATA_DIRECTORY=/piston
 
 echo "🌍 Starting dynamic runtime system..."
-echo "No static packages used — runtimes will be downloaded on first use."
+echo "🔄 Will download runtimes automatically when used..."
 
-# ✅ Start API
-exec node src/index.js
+# ✅ Preload base runtimes (optional, speeds up first requests)
+node src/index.js &
+
+# Give it a few seconds to start
+sleep 3
+
+# ✅ Trigger automatic runtime registration by calling the API locally
+echo "⚙️ Registering runtimes..."
+curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "python"}' || true
+curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "c"}' || true
+curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "cpp"}' || true
+curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "java"}' || true
+curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "javascript"}' || true
+
+# ✅ Keep service alive
+wait
