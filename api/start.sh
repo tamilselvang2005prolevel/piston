@@ -1,36 +1,73 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-# ✅ Setup isolate
-mkdir -p /tmp/isolate
-chmod 777 /tmp/isolate
-export PISTON_TEMPDIR=/tmp/isolate
+echo "=========================================="
+echo "🚀 Starting Piston API container..."
+echo "=========================================="
 
-# ✅ Setup data directory (Render-safe)
+# --- Setup writable temp dirs ---
+mkdir -p /tmp/isolate /tmp/piston
+chmod -R 777 /tmp/isolate /tmp/piston
+
+# --- Handle missing /piston directory (Render-safe) ---
 if [ ! -d "/piston" ]; then
   echo "📁 Creating /piston data directory..."
   mkdir -p /piston
-  chmod 777 /piston
+  chmod -R 777 /piston
 fi
 
-export DATA_DIRECTORY=/piston
+# --- Environment variables ---
+export PISTON_TEMPDIR=/tmp/isolate
+export DATA_DIRECTORY=/tmp/piston
+export data_directory=/tmp/piston
 
 echo "🌍 Starting dynamic runtime system..."
 echo "🔄 Will download runtimes automatically when used..."
 
-# ✅ Preload base runtimes (optional, speeds up first requests)
+# --- Start the Piston API ---
 node src/index.js &
 
-# Give it a few seconds to start
-sleep 3
+# Wait for API to start before warmup
+sleep 10
 
-# ✅ Trigger automatic runtime registration by calling the API locally
-echo "⚙️ Registering runtimes..."
-curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "python"}' || true
-curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "c"}' || true
-curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "cpp"}' || true
-curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "java"}' || true
-curl -X POST http://localhost:10000/api/v2/packages/install -H "Content-Type: application/json" -d '{"language": "javascript"}' || true
+echo "🔥 Starting runtime warmup..."
 
-# ✅ Keep service alive
+# --- Warmup Script (built-in) ---
+node - <<'EOF'
+import fetch from "node-fetch";
+
+const API_URL = "http://localhost:10000/api/v2/execute";
+const runtimes = [
+  { lang: "python", version: "3.10.0", code: "print('Python OK')" },
+  { lang: "c", version: "10.2.0", code: '#include <stdio.h>\nint main(){printf("C OK");return 0;}' },
+  { lang: "cpp", version: "10.2.0", code: '#include <iostream>\nint main(){std::cout<<"C++ OK";}' },
+  { lang: "java", version: "15.0.2", code: 'class Main { public static void main(String[] args){ System.out.println("Java OK"); } }' },
+  { lang: "javascript", version: "18.15.0", code: 'console.log("JS OK")' },
+];
+
+const warmup = async () => {
+  console.log("🚀 Warming up runtimes...");
+  for (const rt of runtimes) {
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: rt.lang,
+          version: rt.version,
+          files: [{ name: `main.${rt.lang === "python" ? "py" : rt.lang === "java" ? "java" : rt.lang === "cpp" ? "cpp" : rt.lang === "javascript" ? "js" : "c"}`, content: rt.code }],
+        }),
+      });
+      const out = await res.json();
+      console.log(`✅ ${rt.lang.toUpperCase()} ready:`, out.run?.output?.trim() || out.message || "no output");
+    } catch (err) {
+      console.error(`❌ ${rt.lang} warmup failed:`, err.message);
+    }
+  }
+  console.log("🎉 Warmup complete!");
+};
+
+warmup();
+EOF
+
 wait
