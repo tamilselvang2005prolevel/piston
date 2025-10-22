@@ -1,20 +1,19 @@
 #!/bin/bash
-set -e
 
 echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-# Ensure directories exist
+# Prepare environment
 mkdir -p /piston /tmp/isolate
-
-echo "🌍 Starting dynamic runtime system..."
-echo "🔄 Runtimes will download automatically when first used..."
 export DATA_DIRECTORY=/piston
 export PISTON_TEMP_DIR=/tmp/isolate
 
+echo "🌍 Starting dynamic runtime system..."
+echo "🔄 Runtimes will download automatically when first used..."
+
 # ================================
-# 🔧 Install runtimes automatically
+# 🧩 Download runtimes (safe mode)
 # ================================
 echo "📦 Fetching core runtimes from Engineer-Man GitHub..."
 RUNTIME_URL="https://github.com/engineer-man/piston/releases/download/pkgs-v3"
@@ -31,25 +30,33 @@ mkdir -p /piston/packages
 
 for lang in "${!RUNTIMES[@]}"; do
   pkg="${RUNTIMES[$lang]}"
-  if [ ! -d "/piston/packages/$lang" ]; then
-    echo "⬇️  Downloading $lang runtime..."
-    wget -q "$RUNTIME_URL/$pkg" -O "/tmp/$pkg"
-    tar -xzf "/tmp/$pkg" -C /piston/packages/
-    rm "/tmp/$pkg"
-    echo "✅ Installed $lang runtime"
-  else
-    echo "✔️  $lang runtime already exists"
+  echo "⬇️  Downloading $lang runtime..."
+  
+  wget -q "$RUNTIME_URL/$pkg" -O "/tmp/$pkg"
+  if [ $? -ne 0 ]; then
+    echo "⚠️  Failed to download $lang runtime, skipping..."
+    continue
   fi
+
+  mkdir -p /piston/packages
+  tar -xzf "/tmp/$pkg" -C /piston/packages/ || echo "⚠️  Failed to extract $lang"
+  rm -f "/tmp/$pkg"
+  
+  echo "✅ Installed $lang runtime"
 done
 
 # ================================
 # 🚀 Start API
 # ================================
+echo "🚀 Starting API server..."
 node src/index.js &
-sleep 10
+API_PID=$!
+
+# Give time for server to boot
+sleep 8
 
 # ================================
-# ⚙️ Warm up
+# ⚙️ Warm up runtimes
 # ================================
 echo "🔥 Warming up key runtimes..."
 for lang in python c cpp java javascript; do
@@ -57,9 +64,10 @@ for lang in python c cpp java javascript; do
   curl -s -X POST http://127.0.0.1:10000/api/v2/execute \
     -H "Content-Type: application/json" \
     -d "{\"language\":\"$lang\",\"version\":\"latest\",\"files\":[{\"content\":\"print('warmup')\"}]}" \
-    || echo "⚠️  Warmup failed for $lang"
+    > /dev/null 2>&1 || echo "⚠️  Warmup failed for $lang"
 done
 
-echo "✅ Warmup finished. Piston API is live."
+echo "✅ Warmup complete. Piston API ready on port 10000."
 echo "=========================================="
-wait
+
+wait $API_PID
