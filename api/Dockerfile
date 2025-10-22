@@ -33,7 +33,7 @@ RUN npm install
 COPY ./src ./src
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
-
+ENV PISTON_FETCH_PACKAGES=true
 CMD ["/start.sh"]
 
 EXPOSE 2000/tcp

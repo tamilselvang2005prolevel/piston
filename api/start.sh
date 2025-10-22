@@ -1,35 +1,27 @@
 #!/bin/bash
-set -e
-
 echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-# ✅ Ensure /piston data directory exists
-if [ ! -d "/piston" ]; then
-  echo "📁 Creating /piston data directory..."
-  mkdir -p /piston
-fi
+# ✅ Ensure directories exist
+mkdir -p /piston
+mkdir -p /tmp/piston
+mkdir -p /tmp/isolate
 
 echo "🌍 Starting dynamic runtime system..."
 echo "🔄 Will download runtimes automatically when used..."
 
-# ✅ Start API in background
 node src/index.js &
 
-# Wait for API to boot
-sleep 8
-
+sleep 5
 echo "🔥 Starting runtime warmup..."
 
-# ✅ Warmup script (CommonJS style)
 node - <<'EOF'
 const fetch = require('node-fetch');
+const base = 'http://127.0.0.1:10000/api/v2/piston/execute';
+const langs = ['python', 'c', 'cpp', 'java', 'javascript'];
 
-async function warmup() {
-  const base = 'http://localhost:10000/api/v2/piston/execute';
-  const langs = ['python', 'c', 'cpp', 'java', 'javascript'];
-
+(async () => {
   for (const lang of langs) {
     console.log(`⚙️  Warming up ${lang}...`);
     try {
@@ -42,16 +34,10 @@ async function warmup() {
           files: [{ name: 'main', content: 'print("hi")' }]
         }),
       });
-      console.log(`${lang} →`, await res.text());
+      console.log(await res.text());
     } catch (err) {
       console.error(`❌ Warmup failed for ${lang}:`, err.message);
     }
   }
-  console.log('✅ Warmup finished.');
-}
-
-warmup();
+})();
 EOF
-
-# ✅ Keep container alive (foreground logs)
-wait
