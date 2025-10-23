@@ -5,27 +5,30 @@ echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-mkdir -p /piston
-echo "🌍 Starting dynamic runtime system..."
-echo "🔄 Runtimes will download automatically when first used..."
+# Ensure main directories exist
+mkdir -p /piston/packages
+cd /piston/packages
 
-# Correct runtime URLs (Engineer-Man official)
-declare -A RUNTIMES
+echo "🌍 Starting dynamic runtime system..."
+echo "🔄 Downloading language runtimes..."
+
+# Use working release URLs
 RUNTIMES=(
-  ["python"]="https://github.com/engineer-man/piston/releases/download/pkgs/python-3.12.0.pkg.tar.gz"
-  ["javascript"]="https://github.com/engineer-man/piston/releases/download/pkgs/node-18.15.0.pkg.tar.gz"
-  ["java"]="https://github.com/engineer-man/piston/releases/download/pkgs/java-15.0.2.pkg.tar.gz"
-  ["c"]="https://github.com/engineer-man/piston/releases/download/pkgs/gcc-10.2.0.pkg.tar.gz"
-  ["cpp"]="https://github.com/engineer-man/piston/releases/download/pkgs/gcc-10.2.0.pkg.tar.gz"
+  "https://github.com/engineer-man/piston/releases/download/pkgs-v3/python.tar.gz"
+  "https://github.com/engineer-man/piston/releases/download/pkgs-v3/javascript.tar.gz"
+  "https://github.com/engineer-man/piston/releases/download/pkgs-v3/java.tar.gz"
+  "https://github.com/engineer-man/piston/releases/download/pkgs-v3/c.tar.gz"
+  "https://github.com/engineer-man/piston/releases/download/pkgs-v3/cpp.tar.gz"
 )
 
-mkdir -p /piston/packages
-
-for lang in "${!RUNTIMES[@]}"; do
-  url="${RUNTIMES[$lang]}"
-  file="/piston/packages/${lang}.pkg.tar.gz"
-  echo "⬇️  Downloading $lang runtime..."
-  curl -fsSLk "$url" -o "$file" || echo "⚠️  Failed to download $lang runtime, skipping..."
+for url in "${RUNTIMES[@]}"; do
+  file=$(basename "$url")
+  echo "⬇️  Downloading $file..."
+  if curl -fsSL --retry 5 "$url" -o "$file"; then
+    tar -xzf "$file" && rm "$file"
+  else
+    echo "⚠️  Failed to download $file, skipping..."
+  fi
 done
 
 echo "🚀 Starting API server..."
