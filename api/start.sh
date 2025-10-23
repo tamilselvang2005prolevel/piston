@@ -5,26 +5,27 @@ echo "=========================================="
 echo "🚀 Starting Piston API container..."
 echo "=========================================="
 
-# Ensure /piston exists
 mkdir -p /piston
-
 echo "🌍 Starting dynamic runtime system..."
 echo "🔄 Runtimes will download automatically when first used..."
 
-# URLs for runtime tarballs
+# Correct runtime URLs (Engineer-Man official)
+declare -A RUNTIMES
 RUNTIMES=(
-    "https://github.com/engineer-man/piston/releases/download/pkgs-v3/python.tar.gz"
-    "https://github.com/engineer-man/piston/releases/download/pkgs-v3/javascript.tar.gz"
-    "https://github.com/engineer-man/piston/releases/download/pkgs-v3/java.tar.gz"
-    "https://github.com/engineer-man/piston/releases/download/pkgs-v3/c.tar.gz"
-    "https://github.com/engineer-man/piston/releases/download/pkgs-v3/cpp.tar.gz"
+  ["python"]="https://github.com/engineer-man/piston/releases/download/pkgs/python-3.12.0.pkg.tar.gz"
+  ["javascript"]="https://github.com/engineer-man/piston/releases/download/pkgs/node-18.15.0.pkg.tar.gz"
+  ["java"]="https://github.com/engineer-man/piston/releases/download/pkgs/java-15.0.2.pkg.tar.gz"
+  ["c"]="https://github.com/engineer-man/piston/releases/download/pkgs/gcc-10.2.0.pkg.tar.gz"
+  ["cpp"]="https://github.com/engineer-man/piston/releases/download/pkgs/gcc-10.2.0.pkg.tar.gz"
 )
 
 mkdir -p /piston/packages
 
-for url in "${RUNTIMES[@]}"; do
-    echo "⬇️  Downloading $(basename $url)..."
-    curl -fsSLk "$url" -o "/piston/packages/$(basename $url)" || echo "⚠️  Failed to download $(basename $url), skipping..."
+for lang in "${!RUNTIMES[@]}"; do
+  url="${RUNTIMES[$lang]}"
+  file="/piston/packages/${lang}.pkg.tar.gz"
+  echo "⬇️  Downloading $lang runtime..."
+  curl -fsSLk "$url" -o "$file" || echo "⚠️  Failed to download $lang runtime, skipping..."
 done
 
 echo "🚀 Starting API server..."
